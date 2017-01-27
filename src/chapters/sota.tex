@@ -1,31 +1,44 @@
-\chapter{State Of The Art}
+\chapter{Related Work}
 \label{chapter:sota}
 
-In applications modeling virtual scenes, objects (rigid or otherwise) are often represented as triangular meshes. In order to give realistic deformable physical properties to these triangular meshes, which are sometimes infinitely thin (in the case of cloth), these meshes are enhanced with a semi-elastic model described in \cite{provot95}. In this system using masses and springs, each vertex holds a virtual mass. The masses are linked by three types of springs. Describing the topology of the masses in terms of a two dimensional array allows the definition of these springs. The first type are the structural springs, which connect masses $\mathbf{[i, j] <-> [i + 1, j]}$ and $\mathbf{[i, j] <-> [i, j + 1]}$. The second type, connecting masses $\mathbf{[i, j] <-> [i + 1, j + 1]}$ and $\mathbf{[i + 1, j] <-> [i, j + 1]}$ are the shear springs. Finally, the flexion springs link masses $\mathbf{[i, j] <-> [i + 2, j]}$ and $\mathbf{[i, j] <-> [i, j + 2]}$. All the springs are weightless and have a natural length. The behavior of such a model is given my Newton's third law, $F = m * a$. The total force acting on every virtual mass can be split into two components: internal forces, such as the tension between the three types of springs, and external forces, such as gravity.
+In applications modeling virtual scenes, objects (rigid or otherwise) are often represented as triangular meshes. In order to give realistic deformable physical properties to these triangular meshes, which are sometimes infinitely thin (in the case of cloth), these meshes are enhanced with a semi-elastic model described in \cite{provot95}. In this system using masses and springs, each vertex holds a virtual mass. The masses are linked by three types of springs. Describing the topology of the masses in terms of a two dimensional array allows the definition of these springs. The first type are the structural springs, which connect masses $\mathbf{[i, j] <-> [i + 1, j]}$ and $\mathbf{[i, j] <-> [i, j + 1]}$. The second type, connecting masses $\mathbf{[i, j] <-> [i + 1, j + 1]}$ and $\mathbf{[i + 1, j] <-> [i, j + 1]}$ are the shear springs. Finally, the flexion springs link masses\\
+ $\mathbf{[i, j] <-> [i + 2, j]}$ and $\mathbf{[i, j] <-> [i, j + 2]}$. All the springs are weightless and have a natural length. The behavior of such a model is given my Newton's third law, $F = m * a$. The total force acting on every virtual mass can be split into two components: internal forces, such as the tension between the three types of springs, and external forces, such as gravity.
 
-\todo{La deformabile conteaza si self-collision}
+Another significant difference from rigid body collision detection is the case of self-collision, the contact between elements (features?) of the same mesh. 
+
+\todo{Mai mult la self collision}
 
 
 \section{Continuous Collision Detection}
-\label{sub-sec:ccd}
+\label{sec:ccd}
 
 Most rigid body simulations approach collision detection in a discrete manner. \textbf{Discrete collision detection} algorithms require a list of objects in the broad phase, or a list of primitives in the more precise mid and narrow phases. These lists are updated at each simulation step, and they are used to find those pairs of intersecting elements. This approach is more computationally efficient, but it has one major drawback, which makes it unfeasible for deformable objects. Due to the (most commonly fixed) time step at which the physics simulation is updated, the exact point of contact between two elements is unknown. The collision detection result should be interpreted as "elements \textbf{A} and \textbf{B} have intersected sometime between steps \textbf{T} and \textbf{T + 1}". This allows the "bullet through paper" problem, also known as \textbf{tunneling}, to occur: An object \textbf{A} is heading towards another, \textbf{B}, with such speed that at time step \textbf{T} they have not yet intersected, but at the next step, \textbf{T + 1}, \textbf{A} has already completely passed through \textbf{B}, and the collision is missed. One could shorten the time between simulation updates, but this filters only some missed collisions, not all. In addition, this approach negatively impacts application performance. Depending on the level of object detail, these inter-penetrations happen frequently, even with small time windows between simulation updates. For deformable objects, this is unacceptable, as the simulation might never recover ("sewn" cloth due to missed collisions that can never untangle), forfeiting life-like behavior. For this reason, deformable object simulations often implement \textbf{continuous collision detection} methods. Unlike their discrete counterparts, these methods can accurately detect the intersection between two elements. Between two consecutive time steps, the simulation interpolates the position of all elements, and the actual detection is done on the deformed volumes of these swept objects.
 
-In \cite{provot97}, Provot uses the earlier defined mass-spring model \cite{provot95} to perform continuous collision detection. It is shown that collisions can only be of two types. The first type is the \textbf{point-triangle} collision - a mesh vertex is in contact with a triangle (either from the same mesh, or a different one). The second is the \textbf{edge-edge} collision, in which two different edges (which again, can be part of the same mesh) collide.
+In \citep{provot97}, Provot uses the earlier defined mass-spring model \citep{provot95} to perform continuous collision detection. It is shown that collisions can only be of two types. The first type is the \textbf{point-triangle} collision - a mesh vertex is in contact with a triangle (either from the same mesh, or a different one). The second is the \textbf{edge-edge} collision, in which two different edges (which again, can be part of the same mesh) collide.
 
-In order to detect point-triangle collisions, a vectorial equation giving a non-linear system must be solved. However, the following condition can be used: $\overrightarrow{AP}(t) \cdot \overrightarrow{N} = 0$, where $A$ is a vertex of the triangle, $P$ is the point and $N$ is a normal to the plane defined by the triangle. This dot product is a third degree equation. Of the three $t$ results, only those that lie in the current time interval can correspond to collisions. These values are then substituted in the initial vectorial equation. If more than one are solutions to the system, only the one belonging to the smallest value of t (the one that happened the earliest) is considered to be a collision \cite{provot97}.
+In order to detect point-triangle collisions, a vectorial equation giving a non-linear system must be solved. However, the following condition can be used: $\overrightarrow{AP}(t) \cdot \overrightarrow{N} = 0$, where $A$ is a vertex of the triangle, $P$ is the point and $N$ is a normal to the plane defined by the triangle. This dot product is a third degree equation. Of the three $t$ results, only those that lie in the current time interval can correspond to collisions. These values are then substituted in the initial vectorial equation. If more than one are solutions to the system, only the one belonging to the smallest value of t (the one that happened the earliest) is considered to be a collision \citep{provot97}.
+
+A similar approach is taken in the case of edge-edge collisions. The initial equation is non-linear, but another condition can be used to reduce it to a cubic equation. The observation is that at the time of contact, all four vertices related to the two edges are on the same plane.
 
 \todo{Mai mult}
 
 \section{Bounding Volume Hierarchies}
-\label{sub-sec:bvh}
+\label{sec:bvh}
+
+\textbf{Bounding Volume Hierarchies} are a very common type of structure used in collision detection, for both rigid and deformable objects. The basic idea of this structure is to hierarchically partition the scene into \textbf{bounding volumes}, such that the root contains all the objects present, the leaves contain a single element (or any number of elements below a fixed threshold), and the internal nodes contain increasingly smaller volumes while traversing down the tree.
+
+\subsection{Bounding Volume Choice}
+\label{sub-sec:bvc}
+
+Different types of bounding volumes have been the subject of research in constructing the hierarchies. The usefulness and performance of a certain type of bounding volume depends on the application and the scene to be rendered. Bounding volumes can be measured in terms of performance using three main criteria. The first is the cost of computing these volumes from the objects they bound. The second is how well the volumes approximate their objects (tight-fitting bounding volumes are better). The third criterion is the cost of overlap tests. \textbf{Oriented Bounding Boxes}, which build \textbf{OBBTrees} have been researched in \citep{gott96}. In this paper, the authors use a \textbf{separating axis test} in order to test for box overlap, which improves the performance of OBBTrees and diminishes the disadvantage of using OBBs as bounding volumes, which is the high construction computational cost. A consequence of the Separating Axis Theorem is that in order to determine if two boxes are disjoint, it is sufficient to find one axis that is orthogonal to any of the box faces, or orthogonal to an edge from any of the boxes. Only if all 15 (3 unique face directions from either box, 9 unique edge direction combinations) of the possible axes are not separating can the boxes be considered as intersecting. \citep{vdb97} uses \textbf{Axis-Aligned Bounding Boxes} as volumes for the BVH, which are relatively easy to construct and test for intersection, but are not as tight fitting as OBBs. Generalizing the AABB, \textbf{K-DOPs} have been researched in \citep{klo98}. Another possible bounding volume is the \textbf{sphere} \citep{hub96}. The main advantage of the bounding sphere is its extremely lightweight overlap test. However, depending on object complexity, bounding spheres can be difficult to build, and some objects are not accurately bounded (a sword, for example).
+
 
 \todo{Construire BVH, update si traversare}
 \todo{Ce se stocheaza practic in BVH - mai multe posibilitati}
 
 \section{Signed Distance Fields}
-\label{sub-sec:sdf}
+\label{sec:sdf}
 
 \section{Uniform Spatial Partitioning}
-\label{sub-sec:usp}
+\label{sec:usp}
 

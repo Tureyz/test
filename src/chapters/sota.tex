@@ -1,6 +1,8 @@
 \chapter{Related Work}
 \label{chapter:sota}
 
+\todo{Desen mass-spring}
+
 In applications modeling virtual scenes, objects (rigid or otherwise) are often represented as triangular meshes. In order to give realistic deformable physical properties to these triangular meshes, which are sometimes infinitely thin (in the case of cloth), these meshes are enhanced with a semi-elastic model described in \cite{provot95}. In this system using masses and springs, each vertex holds a virtual mass. The masses are linked by three types of springs. Describing the topology of the masses in terms of a two dimensional array allows the definition of these springs. The first type are the structural springs, which connect masses $\mathbf{[i, j] <-> [i + 1, j]}$ and $\mathbf{[i, j] <-> [i, j + 1]}$. The second type, connecting masses $\mathbf{[i, j] <-> [i + 1, j + 1]}$ and $\mathbf{[i + 1, j] <-> [i, j + 1]}$ are the shear springs. Finally, the flexion springs link masses\\
  $\mathbf{[i, j] <-> [i + 2, j]}$ and $\mathbf{[i, j] <-> [i, j + 2]}$. All the springs are weightless and have a natural length. The behavior of such a model is given my Newton's third law, $F = m * a$. The total force acting on every virtual mass can be split into two components: internal forces, such as the tension between the three types of springs, and external forces, such as gravity.
 
@@ -30,11 +32,49 @@ A similar approach is taken in the case of edge-edge collisions. The initial equ
 \subsection{Bounding Volume Choice}
 \label{sub-sec:bvc}
 
-Different types of bounding volumes have been the subject of research in constructing the hierarchies. The usefulness and performance of a certain type of bounding volume depends on the application and the scene to be rendered. Bounding volumes can be measured in terms of performance using three main criteria. The first is the cost of computing these volumes from the objects they bound. The second is how well the volumes approximate their objects (tight-fitting bounding volumes are better). The third criterion is the cost of overlap tests. \textbf{Oriented Bounding Boxes}, which build \textbf{OBBTrees} have been researched in \citep{gott96}. In this paper, the authors use a \textbf{separating axis test} in order to test for box overlap, which improves the performance of OBBTrees and diminishes the disadvantage of using OBBs as bounding volumes, which is the high construction computational cost. A consequence of the Separating Axis Theorem is that in order to determine if two boxes are disjoint, it is sufficient to find one axis that is orthogonal to any of the box faces, or orthogonal to an edge from any of the boxes. Only if all 15 (3 unique face directions from either box, 9 unique edge direction combinations) of the possible axes are not separating can the boxes be considered as intersecting. \citep{vdb97} uses \textbf{Axis-Aligned Bounding Boxes} as volumes for the BVH, which are relatively easy to construct and test for intersection, but are not as tight fitting as OBBs. Generalizing the AABB, \textbf{K-DOPs} have been researched in \citep{klo98}. Another possible bounding volume is the \textbf{sphere} \citep{hub96}. The main advantage of the bounding sphere is its extremely lightweight overlap test. However, depending on object complexity, bounding spheres can be difficult to build, and some objects are not accurately bounded (a sword, for example).
+Different types of bounding volumes have been the subject of research in constructing the hierarchies. The usefulness and performance of a certain type of bounding volume depends on the application and the scene to be rendered. Bounding volumes can be measured in terms of performance using three main criteria. The first is the cost of computing these volumes from the objects they bound. The second is how well the volumes approximate their objects (tight-fitting bounding volumes are better). The third criterion is the cost of overlap tests.
+
+\todo{Desen BV-uri}
+
+\textbf{Oriented Bounding Boxes}, which build \textbf{OBBTrees} have been researched in \citep{gott96}, where the authors use the mean vertex value and covariance matrix to build the OBBs. The eigenvectors of the covariance matrix, which are orthogonal given the symmetric structure of the matrix, are used as a basis (after normalization) to find the extremal vertices on each axis, which are then sized to find the OBB.
+\citep{gott96} uses a \textbf{separating axis test} in order to test for box overlap, which improves the performance of OBBTrees and diminishes the disadvantage of using OBBs as bounding volumes, which is the high construction computational cost. A consequence of the Separating Axis Theorem is that in order to determine if two boxes are disjoint, it is sufficient to find one axis that is orthogonal to any of the box faces, or orthogonal to an edge from any of the boxes. Only if all 15 (3 unique face directions from either box, 9 unique edge direction combinations) of the possible axes are not separating can the boxes be considered as intersecting. \citep{vdb97} uses \textbf{Axis-Aligned Bounding Boxes} as volumes for the BVH, which are relatively easy to construct and test for intersection, but are not as tight fitting as OBBs. Generalizing the AABB, \textbf{K-DOPs} have been researched in \citep{klo98}. Another possible bounding volume is the \textbf{sphere} \citep{hub96, rtsd01}. The main advantage of the bounding sphere is its extremely lightweight overlap test. However, depending on object complexity, bounding spheres can be difficult to build, and some objects are not accurately bounded (a sword, for example).
+
+\subsubsection{BVH Construction}
+\label{sub-sub-sec:bvhconstruction}
+
+Three main strategies for constructing BVHs are widely used in collision detection: \textbf{top-down}, \textbf{bottom-up}, and \textbf{insertion}. Out of these, top-down is the most common. This approach finds a volume for all the polygons, then recursively splits this volume until the number of polygons in each node is smaller than a threshold; $th = 1$ is a widely used value. \cite{gott96} uses the top-down method to build the OBBTree. The splitting rule used finds the longest axis of an OBB, and the mean point of the vertices projected on that axis as the splitting point. In this manner, a plane is obtained, and polygons are partitioned based on their relative positions to this plane. If the longest axis cannot be split, the second and third are tried, labeling the volume as indivisible if all three axes fail. \citep{vdb97} also uses the top-down approach to building a BVH, and reports that the same splitting rule is the most efficient for AABBTrees as well. It is worth noting that finding the projection of a vertex along an AABB axis is cheaper than in the case of OBBs, as the box is aligned with the world axes, and the projection of vertex $v(v_{x}, v_{y}, v_{z})$ on axis $a \in \{OX, OY, OZ\}$ is simply the coordinate component corresponding to that axis. In \citep{vmt95} a bottom-up approach is used. A region merging strategy is used, and two properties allow for efficient discard of many false positive collision tests. The first property states that if an area in which a vector $V$ has $V \cdot N_{T} > 0$, where $N_{T}$ are the triangle normals in that area, and if the 2D contour projection of the area along this vector does not self-intersect, the entire area can be skipped. The second property is related to inter-region collisions: if two adjacent areas have a vector $V$ that has $V \cdot N_{T} > 0$, where $N_{T}$ are the triangle normals in both areas, and if the 2D contour projections of the areas along this vector do not collide, the two regions can be skipped. A sphere-tree implementation is presented in \citep{rtsd01}. The hierarchy is built top-down, with each non-leaf sphere enclosing its descendants. At the leaf level, each triangle is assigned its own sphere. This construction takes place in a preprocessing phase.
 
 
-\todo{Construire BVH, update si traversare}
-\todo{Ce se stocheaza practic in BVH - mai multe posibilitati}
+\subsubsection{BVH Update}
+\label{sub-sub-sec:bvhupdate}
+
+The nature of deformable objects makes BVHs not accurate as the simulation develops. Due to this, the hierarchies have to be either re-built or updated. Updating an AABBTree is significantly faster than re-building one \citep{vdb97}. The refitting algorithm in the afore-mentioned paper is based on the following property: given two polygon sets and their AABBs, the smallest AABB bounding the two previous boxes is also the smallest AABB bounding the two sets. Using this statement, an AABBTree can be refitted in a bottom-up fashion: the leaf bounding volumes are recalculated, then every box corresponding to an non-terminal node is refitted using the volumes of its children. The sphere-tree implementation presented in \citep{rtsd01} allows the number of leaf nodes to remain constant, as long as the objects do not morph. The refitting algorithm uses a priority queue of spheres, in which the ordering criterion is the tree depth. Initially, the queue is filled with all the leaves corresponding to triangles that have deformed since the last update. Then, the algorithm extracts the head of the queue, adjusts the sphere position and radius, and inserts its parent into the queue. This process repeats until the queue is empty.
+
+\subsubsection{BVH Traversal}
+\label{sub-sub-sec:traversal}
+
+Perhaps the most widely used method for traversing a BVH is the top-down approach seen in \hyperref[alg:BVHQuery]{$TestCollisions$}. This method completely discards node pairs which do not overlap - if two internal nodes are not colliding, neither can any of their leaves. The overhead of recursion can be eliminated by designing an equivalent algorithm, using a stack and a loop. Redefining the order in which nodes are descended into also represents an improvement, especially when the BVH is binary. \citep{vdb97} uses a binary BVH and when dealing with two internal nodes, the one with the largest volume is descended into.
+
+\begin{algorithm}
+	\label{alg:BVHQuery}
+	\caption{Querying a BVH for all collisions}
+	\begin{algorithmic}[1]
+		\Procedure{TestCollisions}{$firstNode$, $secondNode$, $result$}
+		\If{$firstNode$ and $secondNode$ are not null, and their volumes overlap}
+			\If{$firstNode$ <> $secondNode$, and both are leaves}
+				\State Perform primitive tests and add all relevant pairs to $result$		
+			\Else
+				\State $nodeListA \gets firstNode$ if $firstNode$ is a leaf, else $firstNode.children$
+				\State $nodeListB \gets secondNode$ if $secondNode$ is a leaf, else $secondNode.children$
+				\ForAll{$childA$ of $nodeListA$ and $childB$ of $nodeListB$}
+					\State \Call{TestCollisions}{$childA$, $childB$, $result$}
+				\EndFor
+			\EndIf
+		\EndIf
+		\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+
 
 \section{Signed Distance Fields}
 \label{sec:sdf}
@@ -42,3 +82,5 @@ Different types of bounding volumes have been the subject of research in constru
 \section{Uniform Spatial Partitioning}
 \label{sec:usp}
 
+\section{Other Collision Detection Methods}
+\label{sec:others}

@@ -98,10 +98,12 @@ Most applications of SDF-based collision detection schemes are not suited for re
 \section{Uniform Spatial Partitioning}
 \label{sec:usp}
 
-The methods presented in this section provide simple and efficient implementations for the collision detection of both rigid and deformable objects. A very promising strategy is presented in \citep{thm03}. The algorithm works on tetrahedral meshes, but can be adapted to more widely used triangulated representations as well. The main structure here is a \textbf{spatial hash table}, and the algorithm runs in three passes. No assumptions are made about the world boundaries. In the first pass, given a \textbf{cell size}, all vertex coordinates are divided by this cell size and rounded to the next integer. This results in a three-component coordinate, which acts as an input for a hashing function. Based on the result of this function, information about the object is stored in a hash table. In this first phase, all tetrahedron AABBs are also updated. The second pass then iterates through all tetrahedrons, 
+The methods presented in this section provide simple and efficient implementations for the collision detection of both rigid and deformable objects. A very promising strategy is presented in \citep{thm03}. The algorithm works on tetrahedral meshes, but can be adapted to more widely used triangulated representations as well. The main structure here is a \textbf{spatial hash table}, and the algorithm runs in passes. No assumptions are made about the world boundaries. In the first pass, given a \textbf{cell size}, all vertex coordinates are divided by this cell size and rounded to the next integer. This results in a three-component coordinate, which acts as an input for a hashing function. Based on the result of this function, information about the object is stored in a hash table. In this first phase, all tetrahedron AABBs are also updated. The second pass then iterates through all tetrahedrons, discretizing the AABB corners and considering all discrete values between the minima and maxima along all three axes. Using these values, the hash function is applied in order to find all affected cells. The tetrahedron is tested for intersection with all vertices contained in these cells. The final test which consists of the overlap test first tests vertices against the tetrahedron AABB. If a vertex is inside this box, only then is an accurate point-tetrahedron test performed.
+
+\todo{variatia parametrilor in spatial hash}
 
 
 \section{Other Collision Detection Methods}
 \label{sec:others}
 
-\todo{Aici representative-triangles, alte feature-based, frame skipping session}
+\todo{Aici representative-triangles, alte feature-based, frame skipping session, collision streams}

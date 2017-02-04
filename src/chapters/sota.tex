@@ -26,16 +26,9 @@ A similar approach is taken in the case of edge-edge collisions. The initial equ
 Another significant difference from rigid body collision detection is the case of self-collision, the contact between primitives of the same mesh. Provot, in \citep{provot97} implements an optimization in this case. It is based on the conditions described in \citep{vmt94}, and states that a connex area has a low enough curvature, self-collision tests can be skipped in this area. The curvature test is done by forming a cone from all the triangle normals in the area, as seen in \autoref{img:normal-cones}. If the angle at the tip of the cone, $\alpha$, is lower than $\pi$, the zone cannot self-intersect.
 
 
-
-
-
-\todo{Mai mult}
-
 \FloatBarrier
 \section{Bounding Volume Hierarchies}
 \label{sec:bvh}
-
-\todo{Pe undeva un tabel cu comparatie intre rezultate bvh}
 
 \textbf{Bounding Volume Hierarchies} are a very common type of structure used in collision detection, for both rigid and deformable objects. The basic idea of this structure is to hierarchically partition the scene into \textbf{bounding volumes}, such that the root contains all the objects present, the leaves contain a single element (or any number of elements below a fixed threshold), and the internal nodes contain increasingly smaller volumes while traversing down the tree.
 
@@ -130,14 +123,18 @@ In the spatial hashing method presented in \citep{thm03}, three components can b
 \section{Feature Based Methods}
 \label{sec:feature}
 
-The methods presented previously \hyperref[sec:bvh]{here} make use of hierarchies, finding overlap between triangle pairs. In contrast, algorithms based on features have been developed. A feature of a mesh is either a vertex, an edge, or a face. \citep{curtis2008} propose a different type of hierarchy aimed at reducing the number of false positive or duplicate overlap tests. These duplicate tests occur because they are performed on triangles, which sometimes share features. Collision detection using feature-based hierarchies require three structures for each object, one for each type of feature (vertex, edge, face), and contact information is received by testing between edge BVHs and vertex-face BVHs. Besides improving efficiency by avoiding duplicate tests (for example, testing an edge shared by two triangles twice), this method also leads to better performance due to bounding volumes being smaller than the volumes of their triangles. However, the main drawback to this approach is immediately apparent: there are three trees instead of one, and each requires updating. In order to combine the advantages of feature based and triangle based hierarchies, the authors of \citep{curtis2008} introduce \textbf{Representative Triangles}. A RT is a triangle structure that in addition to regular information, also stores feature assignments and bounding volumes for those features. In order to create RTs from a mesh, the authors provide the conditions that must be satisfied:
+The methods presented previously in \autoref{sec:bvh} make use of hierarchies, finding overlap between triangle pairs. In contrast, algorithms based on features have been developed. A feature of a mesh is either a vertex, an edge, or a face. \citep{curtis2008} propose a different type of hierarchy aimed at reducing the number of false positive or duplicate overlap tests. These duplicate tests occur because they are performed on triangles, which sometimes share features. Collision detection using feature-based hierarchies require three structures for each object, one for each type of feature (vertex, edge, face), and contact information is received by testing between edge BVHs and vertex-face BVHs. Besides improving efficiency by avoiding duplicate tests (for example, testing an edge shared by two triangles twice), this method also leads to better performance due to bounding volumes being smaller than the volumes of their triangles. However, the main drawback to this approach is immediately apparent: there are three trees instead of one, and each requires updating. In order to combine the advantages of feature based and triangle based hierarchies, the authors of \citep{curtis2008} introduce \textbf{Representative Triangles}. A RT is a triangle structure that in addition to regular information, also stores feature assignments and bounding volumes for those features. In order to create RTs from a mesh, the authors provide the conditions that must be satisfied:
 
 \begin{itemize}
 	\item Every feature must be represented by exactly one triangle
 	\item Features are incident to their representative triangles
 \end{itemize}
 
-, where the incidence of two features means that one includes the other in its construction \citep{curtis2008}. Using these properties, there are multiple valid \textbf{assignment schemata}. An optimal schema provides the minimum number of false positives. If the topology of the mesh and the collision scenarios are variable (or real-time), an optimal assignment cannot be found beforehand. The authors show that any convenient assignment schema will suffice, and provide a greedy algorithm for constructing RTs, iterating through triangles and assigning any available features to that RT. When performing continuous collision detection, an elementary test, one of those described in \citep{provot97}, is done only when two compatible features are found overlapping - an edge BV intersecting with another, or a vertex BV colliding with a face BV.
+, where the incidence of two features means that one includes the other in its construction \citep{curtis2008}. 
+
+\fig[scale=0.2]{src/img/rt-schemata.png}{img:rt-schemata}{Maximal assignment schema (left, triangles with no features are colored dark gray) and uniform assignment schema (right). Source: \citep{curtis2008}}
+
+Using these properties, there are multiple valid \textbf{assignment schemata}. \autoref{img:rt-schemata} shows two schemata. A dot inside a triangle represents the vertex feature assigned to that triangle, while a line represents an edge assignment. On the left, the maximal schema - as many features assigned to as few triangles as possible. The schema on the right is the uniform schema, in which the features are evenly distributed across the available triangles. An optimal schema provides the minimum number of false positives. If the topology of the mesh and the collision scenarios are variable (or real-time), an optimal assignment cannot be found beforehand. The authors show that any convenient assignment schema will suffice, and provide a greedy algorithm for constructing RTs, iterating through triangles and assigning any available features to that RT. When performing continuous collision detection, an elementary test, one of those described in \citep{provot97}, is done only when two compatible features are found overlapping - an edge BV intersecting with another, or a vertex BV colliding with a face BV.
 
 
 \FloatBarrier
@@ -158,12 +155,10 @@ The high-level culling method extends the normal cone to CCD: a \textbf{continuo
 	\item Any nodes containing edge pairs in their contour that have already failed the contour test will not be checked.
 \end{itemize}
 
-The low-level culling method partitions the remaining possible intersecting triangle pairs into two sets: adjacent and non-adjacent. For the non-adjacent set, all 15 primitive tests are performed, and the results are stored in a cache, in order to speed up performance when encountering redundant tests \citep{tang08}. After this phase, the authors make use of the orphan tests, which are tests between adjacent triangles that are not performed in the previous phase. Two new sets are introduced: the \textbf{Orphan Incident Set} and the \textbf{Orphan Adjacent Set}. As can be seen in \autoref{img:orphan-sets}, the OIS of a feature contains all its incident triangles, while its OAS contains all triangles adjacent to the triangles in the OIS, but not present in the OIS. These two sets are used to find the orphan sets for all vertices and edges. Finally, the adjacent phase tests all pairs in the orphan sets for overlap. Because these orphans are adjacent triangles, BVH tests will not eliminate them. The authors use the CNC test described earlier: if the test shows that an area cannot self intersect, then any orphan pairs completely inside that area can be discarded.
+The low-level culling method partitions the remaining possible intersecting triangle pairs into two sets: adjacent and non-adjacent. For the non-adjacent set, all 15 primitive tests are performed, and the results are stored in a cache, in order to speed up performance when encountering redundant tests \citep{tang08}. After this phase, the authors make use of the orphan tests, which are tests between adjacent triangles that are not performed in the previous phase. Two new sets are introduced: the \textbf{Orphan Incident Set} and the \textbf{Orphan Adjacent Set}.
 
 \fig[scale=0.3]{src/img/orphan-sets.png}{img:orphan-sets}{OIS and OAS for a vertex $v$ (left), and an edge $e$ (right). Source: \citep{tang08}}
 
-\section{Other Collision Detection Methods}
-\label{sec:others}
+As can be seen in \autoref{img:orphan-sets}, the OIS of a feature contains all its incident triangles, while its OAS contains all triangles adjacent to the triangles in the OIS, but not present in the OIS. These two sets are used to find the orphan sets for all vertices and edges. Finally, the adjacent phase tests all pairs in the orphan sets for overlap. Because these orphans are adjacent triangles, BVH tests will not eliminate them. The authors use the CNC test described earlier: if the test shows that an area cannot self intersect, then any orphan pairs completely inside that area can be discarded.
 
 
-\todo{Aici representative-triangles, alte feature-based, frame skipping session, collision streams}

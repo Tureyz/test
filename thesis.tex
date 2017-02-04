@@ -1,38 +1,35 @@
 \documentclass{thesis.cs.pub.ro}
-\usepackage{natbib}
+\usepackage[sectionbib]{natbib}
 \usepackage{float}
 \usepackage{placeins}
 \usepackage{hyperref}
 \usepackage{algorithm}
 \usepackage[noend]{algpseudocode}
 \makeindex
+
 \begin{document}
 
 \input{src/global}
 
-\begin{frontmatter} % roman numbering
+%\begin{frontmatter} % roman numbering
 
 %\maketitle
 \input{template/titlepage.en}
-
-
-\begin{abstract}
-\input{src/base/abstract}
-\end{abstract}
-
 %\input{template/contents.pages}
 
-\printabbrev
+%\printabbrev
 
-\end{frontmatter} % end roman numbering
+%\end{frontmatter} % end roman numbering
 
 % 1.5 linespacing for the contents
 \onehalfspacing
 
-\input{src/main}
+\include{src/main}
 
-\bibliography{src/main}
+
 \bibliographystyle{plainnat}
+\bibliography{src/main}
+
 
 \printindex
 

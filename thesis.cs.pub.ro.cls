@@ -12,7 +12,7 @@
 \def\ExecuteOptions#1{%
  \ExecuteOptions@ltx{a4paper,11pt,oneside,onecolumn,final}%
 }%
-\LoadClassWithOptions{article}
+\LoadClassWithOptions{report}
 \let\ExecuteOptions\ExecuteOptions@ltx
 
 % uncomment the lines bellow for Romanian Language support

@@ -1,0 +1,83 @@
+\chapter{Implementation}
+\label{section:implementation}
+
+In order to test and benchmark the CD methods, an engine has been developed. OpenGL is used for drawing the scene, and GLM for most CPU mathematical operations, while the CUDA-specific functions are used on the GPU. The platform supports the instantiation of a triangulated mesh with user-defined "resolution", as well as other 3D objects, such as a tetrahedron or a sphere. All objects can be defined as rigid or deformable. In its current state, the class used to describe objects stores their transformed vertices. This means that both the model matrix and the transformed vertices are computed on the CPU, and these transformed vertices are then multiplied by the view-projection matrix, in a vertex shader (GLSL is used for shader programming). An area worth exploring is shader feedback, allowing the vertices to be transformed inside the graphics pipeline, and getting the world-space points back to the CPU. If collision detection is enabled, all triangles participating in collisions are highlighted. Some CD methods have visual representations, and the engine supports their drawing.
+
+\fig[height=0.35\textheight]{src/img/app-col.png}{img:app-col}{A scene with a mesh object and a sphere. Collision response is disabled. The objects have 19602 triangles each. Colliding triangles on both the mesh and the sphere are colored in red, and the broad phase BVH is drawn with blue.}
+
+
+\section{CPU Cloth Engine Implementation}
+\label{sec:cpu-impl}
+
+The cloth behavior is modeled using a position based dynamics approach, similar to \citep{mullerpbd}. Given a triangular mesh, the stretching constraints are generated from all the edges, and the bending constraints are generated from all pairs of adjacent triangles. Each constraint has a function involving a set of points, a stiffness coefficient, and its type is either equality or inequality. An equality constraint is satisfied if $f = 0$, while an inequality is satisfied if $f \geq 0$. The stretching function used is \[f(p_{1}, p_{2}) = | p_{21} | - initial\_edge\_length, type = equality\] where $p_{1}$ and $p_{2}$ are the edge endpoints, and the bending function is \[ f(p_{1}, p_{2}, p_{3}, p_{4}) = acos(\frac{p_{21} \times p_{31}}{|p_{21} \times p_{31}|} \cdot \frac{p_{21} \times p_{41}}{|p_{21} \times p_{41}|}) - \alpha, type = equality\] where $\alpha$ is the initial angle between the two planes containing the triangles. For contact with rigid bodies, the collision constraint function is \[f(p) = (p - contact\_point) \cdot contact\_normal, type = inequality\] where $contact\_point$ lies on the swept segment of point p, and $contact\_normal$ is the rigid body surface normal at this position. The stiffness coefficient for this constraint is always $1$. Solving the constraints involves calculating gradients for their functions, as seen in \citep{mullerpbd}. The internal cloth engine only handles the structural constraints, and constraints generated through rigid body collisions. For collisions with other deformable objects and self collision, the impulse-based method explained in \citep{bridson02} is used. For each collision, the impulses need to be applied to the pair of points on the primitives which are closest to each other. The \hyperref[bary]{weights} of these closest points are used to distribute the impulses to the primitive vertices (triangle corners or edge endpoints). If after a fixed number of maximum iterations, collisions are still present within the cloth, the rigid impact zones method \citep{bridson02} is used as a last resort. The idea is that applying a rigid body motion to a collision-free set maintains this state. Initially, each set contains only one vertex. When a collision is found, the sets containing the four vertices are merged, using a disjoint-set structure, then their positions are changed using a rigid body motion that conserves linear and angular momentum. The procedure continues until only one set remains, or until no collisions are found.
+
+\fig[height=0.35\textheight]{src/img/cloth-engine.png}{img:cloth-engine}{An approximately 700 triangle piece of cloth simulated within the application using the hybrid CPU implementation. One of the corner vertices is fixed.}
+
+\section{GPU Cloth Engine Implementation}
+\label{sub-sec:gpu-impl}
+
+Two implementations for the internal cloth engine currently exist in the application: the Mass-Spring system, and the Position Based Dynamics approach. Both engines are designed for parallel GPU execution.
+
+\fig[scale=0.38]{src/img/cudaCloth.png}{img:cudaCloth}{A piece of cloth with its middle vertex fixed is simulated with the application as it falls to the (invisible) ground. Approximately 7000 triangles are used. In the picture to the right, self-collision contacts are colored as follows: red is for a VF contact, green is for an EE contact, and yellow is for both. The cloth engine used is the parallel PBD.}
+
+\subsection{Mass-Spring System}
+\label{sub-sec:mss}
+
+The data structures needed for simulation using the Mass-Spring system are generated before the simulation begins. These include arrays for identifying the endpoints of springs, their stiffness values, rest lengths, and an inverted index array which for every particle holds index references to all springs that affect it (this is needed to avoid atomic operations). A typical update step for the system involves computing the total force acting upon a particle. This force is split into two components: external and internal. The former includes gravity and the latter the spring forces. After the total force is computed, a Verlet time integration step is used to obtain the new particle positions. The last part of the internal cloth dynamics engine aims to correct overstretched springs. When using this system, collision response is an independent module. Collisions have to be identified and corrected separately. The impulse-based approach presented by \citep{bridson02} is used.
+
+
+
+\subsection{Position Based Dynamics}
+\label{sub-sec:pbdimpl}
+
+The second simulation model is PBD, as explained in \citep{mullerpbd}. In contrast to the CPU implementation described in \autoref{sec:cpu-impl}, the GPU version also handles collision constraints. \autoref{img:cudaBend} shows the impact bending constraints have on the realism of the simulation. Without them, the object looks almost completely flat. The effect of Long-Range Attachment constraints are highlighted in \autoref{img:cudaLRA} - adding these constraints to the system is a much more significant performance gain than setting the solver iteration count higher, as convergence is slower. The figure shows that with 600 iterations for every physics step, the cloth stretches unrealistically even with a stiffness coefficient of 0.99, whereas using LRA constraints and a much lower solver iteration count quickly stabilizes the object.
+
+
+\fig[scale=0.4]{src/img/cudaBendComparison.png}{img:cudaBend}{A piece of cloth hangs from a fixed corner vertex. On the left, the bending constraints are disabled.}
+
+The solver is implemented using a Jacobi "inspired" method. The corrections for each particle are written into an array and are based on the positions at the previous time step. The array is then compacted as follows: first, it is sorted by the target particle ID. Afterwards, a run-length encoding step is performed. This step results in an array showing how many constraints act upon each particle. The RLE array is then converted into a prefix-sum. The scan operation is useful for knowing the beginning and end of each interval affecting a particle. Finally, each particle uses the endpoints stored in the prefix sum array to average its corrections and modify its position. In contrast to a Gauss-Seidel approach, the current method has a worse convergence rate, but is more suited for parallel computing.
+
+\fig[scale=0.58]{src/img/cudaLRAComparison.png}{img:cudaLRA}{A piece of cloth hangs from two fixed corner vertices. In the left picture, LRA constraints are disabled and the solver runs for 6 iterations per step. In the middle picture, the solver runs for 600 iterations. In the rightmost picture, LRA constraints are enabled and set at 115\% maximum strain, and the solver runs for 6 iterations.}
+
+
+
+
+\section{Collision Detection}
+\label{sec:cd}
+
+The application performs two-phase collision detection at every update step. The broad phase method stores a pointer to the list of all objects present in the scene. It performs cheap AABB tests and outputs a list of candidate pairs, which is passed to the narrow phase method. Each object keeps track of its triangles, along with other useful collision data, such as a pointer to its narrow phase structure. Three collision detection methods are currently present in the application: a BVH, a Spatial Hashing structure similar to \citep{thm03}, and a LBVH. The first two are implemented on the CPU in a sequential fashion, while the latter is a parallel GPU implementation. 
+
+\subsection{BVH}
+\label{sub-sec:bvh}
+
+A BVH is created from an object's triangles only when it first becomes a candidate for collision, and is then updated at each simulation step. The choice of narrow phase bounding volume is the AABB.
+
+The BVH is built top-down, in a recursive manner. The method creates a node given a list of $N$ objects. Then, the list is rearranged such that the first $k$ objects lie on one side of a splitting plane, and the following $N - k$ objects are on the other side. The function is then called recursively on these sub-arrays. The splitting axis is chosen based on the longest edge length of the node bounding box, while the splitting point along this axis is the spatial median. 
+
+Updating the AABB tree is done using a post-order traversal. For any given internal node, its two children AABBs are first updated, then the node AABB is recomputed merging the two descendant boxes. If at a leaf node, the bounding box is simply recomputed given the leaf's triangle bounds. 
+
+In order to find out which triangles intersect, two AABB trees corresponding to the candidate objects are queried. The traversal algorithm exits early with no intersection if the current nodes do not have overlapping AABBs. Otherwise, if both nodes are leaves, primitive triangle-triangle tests are dispatched. If not both nodes are leaves, a function determining which node is to be descended is called. This function avoids choosing the leaf (if any), and chooses the node with the larger AABB volume. The result of the query is a list of triangle pairs which intersect. The triangle-triangle overlap test is implemented as explained in \citep{moller97}.
+
+\subsubsection{Spatial Hashing}
+\label{sub-sec:hash}
+
+The second narrow phase method is a Spatial Hashing structure (\citep{thm03}). The world space is implicitly divided into cells of equal size. Two tables are used: a swept point table, and a swept edge table. At each simulation step, every vertex and edge are inserted into their respective tables, based on their trajectories during the current time step. To insert a primitive, its cell ID is computed by dividing its coordinates by the cell size, then flooring to the previous integer. Using the cell ID (each tuple of 3 coordinates uniquely identifies a cell), a hash value is computed and information about the primitive is stored in the corresponding bucket in the table. After all insertions have been made, a second pass tests all (deforming) triangles against all vertices in the first table, and all edges against the data in the second table. To test a triangle or an edge, a list of all hash cell indices the primitive collides with during the time step is generated. If the primitve bounding volume collides with an item within a hash bucket, an appropriate elementary test is performed.
+
+\subsection{LBVH}
+\label{sub-sec:lbvhimpl}
+
+For narrow phase GPU CCD, a parallel LBVH is used, as explained in \autoref{sec:lbvh}. The tree is rebuilt at each step, as the construction algorithm takes very little time to execute (see \autoref{img:cudaBenchmark}). The AABB collision pairs are written into a single array. Each thread gets a chunk of this array for its box collisions. The total size is conservatively chosen. The maximum number of box collisions is $N^2$, where $N$ is the number of triangles. However, in practice much less is needed. An alternative approach would be for each thread to buffer its collisions and only write into a global dynamic array once its buffer is full, or the end of the traversal has been reached. However, as memory allocations and frees on the GPU are slow, this approach sacrifices performance for more efficient memory usage. After the AABB collisions array is compacted, the elementary triangle tests are created (6 VF tests and 9 EE tests for each triangle pair).
+
+\subsection{Elementary Continuous Collision Detection}
+\label{sub-sec:ccd}
+
+The application supports continuous intersection tests for triangles. At each simulation step, an AABB is computed using the vertex positions at the beginning and end of the time step, and is enlarged with the cloth thickness. To test two primitives, these AABBs are tested. If they intersect, the times at which the four vertices (1 from a point and 3 from a triangle, or two from each edge) are coplanar are determined. Assuming constant velocities within a time step, the coplanarity times for vertices $p_{i}, i = 1..4$ with velocities $v_{i}, i = 1..4$ are found using the scalar triple product \[(p_{21} + t * v_{21}) \times (p_{31} + t * v_{31}) \cdot (p_{41} + t * v_{41}) = 0\] where $vector_{ab}$ means $vector_{a} - vector_{b}$. Due to the large number of floating point operations (which propagate errors) needed to solve this equation, an iterative numerical method was used. The subintervals of $[0, time\_step]$ in which solutions can exist are found, and then the secant method is used for finding the roots. Afterwards, the positions of the four vertices are computed for each root and are tested for intersection. If more than one solution is found, the collision is registered at the earliest time. Whether or not two primitives (point-triangle or edge-edge) are closer than the cloth thickness is not the only information provided by the collision tests. \label{bary}If collision occurs, the module returns a structure holding the time of contact $t_{c} = [0, time\_step]$, the contact normal, and four barycentric coordinates of the closest points (\citep{bridson02}). In the case of point-triangle collisions, the barycentric for the point is 1, and the triangle point closest to it is found using the triangle barycentric formula (with respect to the first point). In the edge-edge case, the barycentric coordinates describe the lengths along each edge where the closest points are found. Regarding contact normals, for the PT case the normal is chosen as the triangle surface normal. In the case of EE collisions, the contact normal is the direction vector between the closest points.
+
+\section{Collision Response}
+\label{sec:crimpl}
+
+If either the GPU Mass-Spring system or the CPU position-force hybrid approach are used, the arrays containing the VF and EE contacts are used to generate impulses in a collision response step (as explained earlier in \autoref{sec:cresp}). In order to apply these impulses in a parallel fashion, a method similar to the one used in the PBD constraint solver is used. As is often the case, each particle will be affected by more than one impulse. It is useful to arrange the impulses such that all impulses applied to a particle are stored in a contiguous space, and to know the beginning and end indices for these ranges. The impulses are averaged and translated into velocity changes.
+
+Otherwise, if the GPU PBD is chosen, the contact arrays are passed to the solver which corrects the positions along with the other constraints. It is worth noting that these collision constraints are not explicitly generated, as all the information needed for their projection is already stored in the contact data structures.
+
+

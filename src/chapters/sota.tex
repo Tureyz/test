@@ -1,8 +1,13 @@
-\section{Related Work}
+\chapter{Related Work}
 \label{sec:sota}
 
 
 
+\section{Cloth Simulation Model}
+\label{sec:csm}
+
+\subsection{Mass-Spring Model}
+\label{sub-sec:msm}
 
 In applications modeling virtual scenes, objects (rigid or otherwise) are often represented as triangular meshes. In order to give realistic deformable physical properties to these triangular meshes, which are sometimes infinitely thin (in the case of cloth), these meshes are enhanced with a semi-elastic model described in \citep{provot95}. In this system using masses and springs, each vertex holds a virtual mass. The masses are linked by three types of springs. Describing the topology of the masses in terms of a two dimensional array allows the definition of these springs:
 
@@ -16,24 +21,50 @@ A visual representation of this model can be seen in \autoref{img:mass-spring}. 
 
 \fig[height=0.25\textheight]{src/img/mass-spring.pdf}{img:mass-spring}{Mass-spring model. Black circles represent the virtual masses. Blue lines are the structural springs, red lines are the shear springs, and green lines are the flexion springs.}
 
+\subsection{Position-Based Dynamics}
+\label{sub-sec:pbd}
+
+An alternative method of modeling cloth is detailed in \citep{mullerpbd}. Instead of modifying forces, the engine works directly on the positions of the vertices. The system works by generating constraints based on the topology of the given triangular mesh. There are two types of constraints: static and dynamic constraints. The static structural constraints (stretching and bending) are generated once at the beginning of the simulation. The dynamic constraints include collision constraints, which are generated when an intersection is detected.  Another type of dynamic constraint is a global strain limiting constraint, introduced in \citep{kim2012}. Long Range Attachments, as the authors name them, are used when the cloth has fixed particles (such as a shirt fixed to a character's shoulders). In these cases, cloth tends to stretch significantly beyond realistic limits. LRAs are used as an alternative to lowering the time step or doing more solver iterations per step. The idea is to identify the fixed particle islands and generate a distance constraint between each free particle and the closest fixed point in each island. These constraints are only activated when the distance between the two end points is greater than a percentage of the initial distance, for example 115\%.
+
+At each simulation step, the dynamics engine first applies the external forces to the vertices, obtaining their candidate positions at the end of the time step. Then, a constraint solver modifies these positions to obtain a collision-free state. \citep{mullerpbd} use this approach to completely model cloth: internal dynamics, collision detection and response.
+
+\section{Elementary Intersection Tests}
+\label{sec:eit}
+
 In \citep{provot97}, Provot uses the earlier defined mass-spring model \citep{provot95} to handle object collisions. It is shown that collisions can only be of two types. The first type is the \textbf{point-triangle} collision - a mesh vertex is in contact with a triangle (either from the same mesh, or a different one). The second is the \textbf{edge-edge} collision, in which two different edges (which again, can be part of the same mesh) collide.
 
 In order to detect point-triangle collisions, a vectorial equation giving a non-linear system must be solved. However, the following condition can be used: \[\overrightarrow{AP}(t) \cdot \overrightarrow{N} = 0,\] where $A$ is a vertex of the triangle, $P$ is the point and $N$ is a normal to the plane defined by the triangle. This dot product is a third degree equation. Of the three $t$ results, only those that lie in the current time interval can correspond to collisions. These values are then substituted in the initial vectorial equation. If more than one are solutions to the system, only the one belonging to the smallest value of t (the one that happened the earliest) is considered to be a collision \citep{provot97}.
 
 A similar approach is taken in the case of edge-edge collisions. The initial equation is non-linear, but another condition can be used to reduce it to a cubic equation. The observation is that at the time of contact, all four vertices related to the two edges are on the same plane: \[(\overrightarrow{AB}(t) \wedge \overrightarrow{CD}(t)) \cdot \overrightarrow{AC}(t) = 0,\] where $\overrightarrow{AB}(t)$ is the first edge, and $\overrightarrow{CD}(t)$ is the second one.
 
+In \citep{moller97}, an alternate method of testing the intersection between two triangles is presented. First, the plane equations of the two triangles are computed. If all the points from either triangle lie on the same side of the other triangle's plane, the method returns false (no intersection). If this check is passed, then the two planes must intersect in a line. The equation of this line is computed, and one of the three main axes $OX$, $OY$, $OZ$ is then chosen based on which is most parallel to the intersection line. The scalar intersection intervals for both triangles with this line, projected on the chosen axis, are then computed. Finally, if these intervals overlap, the triangles themselves overlap.
+
+\citep{held97} presents a similar test for checking overlap between two triangles. Here, only the equation of one of the triangle ($T_{1}$) planes is computed. If all three points forming the other triangle($T_{2}$) are on the same side of this plane, the method returns false. Then, the intersection between the plane and $T_{2}$ is computed - a line segment, coplanar with $T_{1}$. If this line segment intersects or is fully contained in $T_{2}$, the triangles overlap.
+
+Both the methods found in \citep{moller97, held97} require testing if all points of a triangle lie on the same side of the plane formed by the other triangle. Let $A, B, C$ be the vertices of a triangle ($T_{1}$), and $P$ a vertex of another triangle ($T_{2}$). Three difference vectors are computed: $D_{1} = B - A$, $D_{2} = C - A$, $D_{3} = P - A$. The following matrix is then formed:
+
+\[
+\begin{bmatrix}
+	D_{1}x & D_{2}x & D_{3}x \\
+	D_{1}y & D_{2}y & D_{3}y \\
+	D_{1}z & D_{2}z & D_{3}z
+\end{bmatrix}
+\]
+
+The determinant of this matrix is computed. The sign of this determinant shows on which side $P$ lies with  respect to the plane formed by $A$, $B$, $C$. The algorithm is run for all three points of $T_{2}$. If all three determinants have the same sign, the triangles cannot intersect.
+
 \fig[scale = 0.3]{src/img/normal-cones.png}{img:normal-cones}{Computing the normal cone from all the triangle normals of a triangulated area. Source: \citep{provot97}}
 
 \label{lab:ncones}
 Another significant difference from rigid body collision detection is the case of self-collision, the contact between primitives of the same mesh. Provot, in \citep{provot97} implements an optimization in this case. It is based on the conditions described in \citep{vmt94}, and states that if a connex area has a low enough curvature, self-collision tests can be skipped in this area. The curvature test is done by forming a cone from all the triangle normals in the area, as seen in \autoref{img:normal-cones}. If the angle at the tip of the cone, $\alpha$, is lower than $\pi$, the zone cannot self-intersect.
 
-\subsection{Bounding Volume Hierarchies}
-\label{sub-sec:bvh}
+\section{Bounding Volume Hierarchies}
+\label{sec:bvh}
 
 \textbf{Bounding Volume Hierarchies} are a very common type of structure used in collision detection, for both rigid and deformable objects. The basic idea of this structure is to hierarchically partition the scene into \textbf{bounding volumes}, such that the root contains all the objects present, the leaves contain a single element (or any number of elements below a fixed threshold), and the internal nodes contain increasingly smaller volumes while traversing down the tree.
 
-\subsubsection{Bounding Volume Choice}
-\label{sub-sub-sec:bvc}
+\subsection{Bounding Volume Choice}
+\label{sub-sec:bvc}
 
 Different types of bounding volumes have been the subject of research in constructing the hierarchies. The usefulness and performance of a certain type of bounding volume depends on the application and the scene to be rendered. Bounding volumes can be measured in terms of performance using three main criteria. The first is the cost of computing these volumes from the objects they bound. The second is how well the volumes approximate their objects (tight-fitting bounding volumes are better). The third criterion is the cost of overlap tests.
 
@@ -44,8 +75,8 @@ Different types of bounding volumes have been the subject of research in constru
 \textbf{Oriented Bounding Boxes}, which build \textbf{OBBTrees} have been researched in \citep{gott96}, where the authors use the mean vertex value and covariance matrix to build the OBBs. The eigenvectors of the covariance matrix, which are orthogonal given the symmetric structure of the matrix, are used as a basis (after normalization) to find the extremal vertices on each axis, which are then sized to find the OBB.
 \citep{gott96} use a \textbf{separating axis test} in order to test for box overlap, which improves the performance of OBBTrees and diminishes the disadvantage of using OBBs as bounding volumes, which is the high construction computational cost. A consequence of the Separating Axis Theorem is that in order to determine if two boxes are disjoint, it is sufficient to find one axis that is orthogonal to any of the box faces, or orthogonal to an edge from any of the boxes. Only if all 15 (3 unique face directions from either box, 9 unique edge direction combinations) of the possible axes are not separating can the boxes be considered as intersecting. \citep{vdb97} uses \textbf{Axis-Aligned Bounding Boxes} as volumes for the BVH, which are relatively easy to construct and test for intersection, but are not as tight fitting as OBBs. Generalizing the AABB, \textbf{K-DOPs} (Discrete Oriented Polytopes, the intersection of k slabs) have been researched in \citep{klo98}. Another possible bounding volume is the \textbf{sphere} \citep{hub96, rtsd01}. The main advantage of the bounding sphere is its extremely lightweight overlap test. However, depending on object complexity, bounding spheres can be difficult to build, and some objects are not accurately bounded (a sword, for example \citep{rtcd}).
 
-\subsubsection{BVH Construction}
-\label{sub-sub-sec:bvhconstruction}
+\subsection{BVH Construction}
+\label{sub-sec:bvhconstruction}
 
 Three main strategies for constructing BVHs are widely used in collision detection: \textbf{top-down}, \textbf{bottom-up}, and \textbf{insertion}. Out of these, top-down is the most common. This approach finds a volume for all the polygons, then recursively splits this volume until the number of polygons in each node is smaller than a threshold; $th = 1$ is a widely used value. \citep{gott96} use the top-down method to build the OBBTree. The splitting rule used finds the longest axis of an OBB, and the mean point of the vertices projected on that axis as the splitting point. In this manner, a plane is obtained, and polygons are partitioned based on their relative positions to this plane. If the longest axis cannot be split, the second and third are tried, labeling the volume as indivisible if all three axes fail. \citep{vdb97} also uses the top-down approach to building a BVH, and reports that the same splitting rule is the most efficient for AABBTrees as well. It is worth noting that finding the projection of a vertex along an AABB axis is cheaper than in the case of OBBs, as the box is aligned with the world axes, and the projection of vertex $v(v_{x}, v_{y}, v_{z})$ on axis $a \in \{OX, OY, OZ\}$ is simply the coordinate component corresponding to that axis. In \citep{vmt95} a bottom-up approach is used. A region merging strategy is used, and two properties allow for efficient discard of many false positive collision tests:
 
@@ -59,13 +90,13 @@ A sphere-tree implementation is presented in \citep{rtsd01}. The hierarchy is bu
 
 \fig[scale=0.2]{src/img/cone-merge.png}{img:cone-merge}{Descendant normal cones are used to compute the parent cone. Source: \citep{provot97}}
 
-\subsubsection{BVH Update}
-\label{sub-sub-sec:bvhupdate}
+\subsection{BVH Update}
+\label{sub-sec:bvhupdate}
 
-The nature of deformable objects makes BVHs not accurate as the simulation develops. Due to this, the hierarchies have to be either re-built or updated. Updating an AABBTree is significantly faster than re-building one \citep{vdb97}. The refitting algorithm in the afore-mentioned paper is based on the following property: given two polygon sets and their AABBs, the smallest AABB bounding the two previous boxes is also the smallest AABB bounding the two sets. Using this statement, an AABBTree can be refitted in a bottom-up fashion: the leaf bounding volumes are recalculated, then every box corresponding to an non-terminal node is refitted using the volumes of its children. The sphere-tree implementation presented in \citep{rtsd01} allows the number of leaf nodes to remain constant, as long as the objects do not morph. The refitting algorithm uses a priority queue of spheres, in which the ordering criterion is the tree depth. Initially, the queue is filled with all the leaves corresponding to triangles that have deformed since the last update. Then, the algorithm extracts the head of the queue, adjusts the sphere position and radius, and inserts its parent into the queue. This process repeats until the queue is empty.
+The nature of deformable objects makes BVHs not accurate as the simulation develops. Due to this, the hierarchies have to be either re-built or updated. Updating an AABBTree is significantly faster than re-building one \citep{vdb97}. The refitting algorithm in the afore-mentioned paper is based on the following property: given two polygon sets and their AABBs, the smallest AABB bounding the two previous boxes is also the smallest AABB bounding the two sets. Using this statement, an AABBTree can be refitted in a bottom-up fashion: the leaf bounding volumes are recalculated, then every box corresponding to a non-terminal node is refitted using the volumes of its children. The sphere-tree implementation presented in \citep{rtsd01} allows the number of leaf nodes to remain constant, as long as the objects do not morph. The refitting algorithm uses a priority queue of spheres, in which the ordering criterion is the tree depth. Initially, the queue is filled with all the leaves corresponding to triangles that have deformed since the last update. Then, the algorithm extracts the head of the queue, adjusts the sphere position and radius, and inserts its parent into the queue. This process repeats until the queue is empty.
 
-\subsubsection{BVH Traversal}
-\label{sub-sub-sec:traversal}
+\subsection{BVH Traversal}
+\label{sub-sec:traversal}
 
 Perhaps the most widely used method for traversing a BVH is the top-down approach seen in \hyperref[alg:BVHQuery]{$TestCollisions$}. This method completely discards node pairs which do not overlap - if two internal nodes are not colliding, neither can any of their leaves. If only one of the nodes is a leaf, the algorithm will avoid trying to descend into it. The overhead of recursion can be eliminated by designing an equivalent algorithm, using a stack and a loop. Redefining the order in which nodes are descended into also represents an improvement, especially when the BVH is binary. \citep{vdb97} uses a binary BVH and when dealing with two internal nodes, the one with the largest volume is descended into. Traversing a BVH hierarchy in this way discards entire subtrees, efficiently culling unnecessary overlap tests; the closer a discarded node is to the root, the greater the number of culled tests.
 
@@ -90,33 +121,54 @@ Perhaps the most widely used method for traversing a BVH is the top-down approac
 \end{algorithm}
 
 \FloatBarrier
-\subsection{Signed Distance Fields}
-\label{sub-sec:sdf}
+\section{Linear BVH}
+\label{sec:lbvh}
+
+\subsection{Parallel Construction}
+\label{sub-sec-lbvhcons}
+
+Using a classic BVH on the GPU is ill-suited, as the tree structure holds pointers to often scattered memory locations, and its construction (both top-down or bottom-up) is mostly sequential. A parallel construction algorithm aims to linearize the tree into an array and use one thread per internal node, maximizing occupancy. An important property is that a binary tree generated from N triangles will have exactly $N$ leaves and exactly $N - 1$ internal nodes. Using this representation, each node covers a subsequence of the leaf array. An efficient parallel LBVH construction algorithm is presented in \citep{karras2012}. The author first computes Morton codes for each leaf (that is, for each triangle bounding box centroid). The leaves are sorted according to their Morton codes. Each internal node is conceptually aligned with a leaf (its index simply coincides with a leaf index), such that the range it covers either begins with the corresponding leaf, or ends with it. An example of this arrangement can be seen in \autoref{img:lbvh-layout}. In order to determine the case, the leaf has its Morton code compared with that of its immediate neighbors. If the left neighbor has a longer common prefix, the interval ends with the node, and if the right neighbor has a longer common prefix, the interval begins with the node. The other end of the range is found by doing a binary search. The first leaf that has a shorter common prefix than the one found before is the exclusive end of this interval. The final step is finding the split position within this range, such that the left child will cover $[a, split]$ and the right child will cover $[split + 1, b]$, where $a$ and $b$ are interval endpoints and $split$ is the split index. This is also achieved with a binary search. If the common prefix used previously has a length of $L$, the search aims to find where the next bit, $L + 1$, differs.
+
+\fig[scale=0.35]{src/img/karras-tree.png}{img:lbvh-layout}{Tree layout for a LBVH, as seen in \citep{karras2012}. Each internal node (brown) is aligned with a leaf (green). The split positions are marked with red circles, and the first diferring bits between two adjacent leaves are marked with horizontal arrows.}
+
+\subsection{Parallel Traversal}
+\label{sub-sec-lbvhtrav}
+
+In order to find the colliding bounding volume pairs, two LBVHs must be queried. One way to achieve this in parallel is to launch one thread for each leaf of the first tree, and query it against the second tree. The parallel traversal method is similar to the \hyperref[alg:BVHQuery]{$TestCollisions$} algorithm shown earlier. Here, $firstNode$ is the query leaf, and $secondNode$ is the root of the second tree. However, recursion is simulated with a normal loop and a stack of nodes to be explored. This is preferable as recursion slows down execution, and implies a call stack size that is unknown at compile time. 
+
+
+\FloatBarrier
+\section{Signed Distance Fields}
+\label{sec:sdf}
 
 
 \textbf{Signed Distance Fields} (SDFs) are grid-like structures which store the distance to a surface. The minimum distance between every cell and the nearest contact point with the surface is stored, with points inside the surface having a negative value, and a positive value when outside the surface. These fields can themselves have uniform cells, or hierarchical partitions. In \citep{fris00}, \textbf{Adaptively Sampled Distance Fields} (ASDFs) are proposed as a data structure to be used in graphical applications, and not only for collision detection. The ASDFs presented there increase sampling rates in regions of fine detail and use a spatial hierarchy for storage. Furthermore, two construction methods are presented. The first is a bottom up approach, which starts with a regularly sampled distance field of finite resolution and constructs an octree \citep{fris00}. After that, starting from the leaves and advancing to the root, a group of 8 cells is merged if none of them have any descendants and if the sampled distance of all 8 can be reconstructed from the values of their parent. The process stops when at any given level, no cells have been merged, or when the root is reached. The top-down method starts with computing the distance values for the root of the ADF octree. Then, the cells are divided according to a rule. The predicate used by the authors in \citep{fris00} compares distances stored in a cell, obtained using the distance function, with the sampled distances from that cell. The distance differences are computed at the center of the cell, and the centers of all faces and edges. If any of these differences (in absolute value) is greater than a specified threshold, the cell is divided. In \citep{fsg03}, given a triangular mesh, face normals are used for distance field generations. The algorithm is as follows: for every triangle, its vertices are moved "forwards" and "backwards" along its face normal, by an amount proportional to its cell diagonal. The resulting triangle prism is enclosed in a bounding box. Afterwards, for every grid cell inside that box, the distance to the triangle is computed. This distance is then signed according to the dot product between the face normal and the direction vector (negative if the point is below the plane in which the triangle resides, positive otherwise).
 
-\fig[scale=0.3]{src/img/sdf-eps.png}{img:sdf-eps}{On the left, the consequence of only considering vertices can be seen: interpenetration. On the right, vertices are offset by an $\epsilon$. Source: \citep{fsg03}}
 
 Earlier research into SDF-based collision detection schemes has shown that they are not suited for real-time applications. Their accuracy is feasible for off-line rendering scenarios, such as film making, but their time performance is not appropriate for interactive simulations. However, efficient collision detection between deformable and rigid objects is performed in \citep{fsg03}. The authors have chosen not to test every triangle of the deformable object, but only the vertices. Due to this approximation, the vertices are translated away from a surface using a predefined value, $\epsilon$, which is chosen based on the triangle size. Using this margin of error, a vertex is considered as intersecting with the surface if its distance is smaller than this $\epsilon$, as can be seen in \autoref{img:sdf-eps}.
 
-\subsection{Uniform Spatial Partitioning}
-\label{sub-sec:usp}
+\FloatBarrier
+
+\fig[scale=0.3]{src/img/sdf-eps.png}{img:sdf-eps}{On the left, the consequence of only considering vertices can be seen: interpenetration. On the right, vertices are offset by an $\epsilon$. Source: \citep{fsg03}}
+
+
+\section{Uniform Spatial Partitioning}
+\label{sec:usp}
 
 
 
 The methods presented in this section provide simple and efficient implementations for the collision detection of both rigid and deformable objects. A very promising strategy is presented in \citep{thm03}. The algorithm works on tetrahedral meshes (allowing for true object thickness, as can be seen in \autoref{img:tetra-hash}), but can be adapted to more widely used triangulated representations as well. The main structure here is a \textbf{spatial hash table}, and the algorithm runs in passes. No assumptions are made about the world boundaries. In the first pass, given a \textbf{cell size}, all vertex coordinates are divided by this cell size and rounded to the next integer. This results in a three-component coordinate, which acts as an input for a hashing function. Based on the result of this function, information about the object is stored in a hash table. In this first phase, all tetrahedron AABBs are also updated. The second pass then iterates through all tetrahedrons, discretizing the AABB corners and considering all discrete values between the minima and maxima along all three axes. Using these values, the hash function is applied in order to find all affected cells. The tetrahedron is tested for intersection with all vertices contained in these cells. The final test which consists of the overlap test first tests vertices against the tetrahedron AABB. If a vertex is inside this box, only then is an accurate point-tetrahedron test performed.
 
-\fig[scale=0.25]{src/img/tetra-hash.png}{img:tetra-hash}{Tetrahedral mesh representation of an object. Collision detection is done using a spatial hashing structure. Source: \citep{thm03}}
+\fig[scale=0.3]{src/img/tetra-hash.png}{img:tetra-hash}{Tetrahedral mesh representation of an object. Collision detection is done using a spatial hashing structure. Source: \citep{thm03}}
 
 In the spatial hashing method presented in \citep{thm03}, three components can be varied and can have an impact on performance. The first is the hashing function itself; different choices of the mapping procedure will affect distribution in the hash table. The function used by the authors is \[h(x, y, z) = (x * p_{1} \oplus y * p_{2} \oplus  z * p_{3}) \% n,\] where $\oplus$ is the XOR operation, $n$ is the table size, and $p_{1}, p_{2}, p_{3}$ are three large prime numbers. The second parameter to be tweaked is the hash table size. The authors test their spatial hashing implementation with varying table sizes, and their results indicate that a larger size yields better performance. The last parameter is the cell size. This has the greatest performance impact out of all three, according to \citep{thm03}. If the cell size is too large, the table buckets will contain on average more elements, negatively impacting performance. On the other hand, if the cell size is too small, the tetrahedrons will span a larger number of cells, and will be checked against a larger number of vertices. Measurements indicate that the optimal cell size is about the average edge size for all tetrahedrons in the scene.
 
 
 \FloatBarrier
-\subsection{Feature Based Methods}
-\label{sub-sec:feature}
+\section{Feature Based Methods}
+\label{sec:feature}
 
-The methods presented previously in \autoref{sub-sec:bvh} make use of hierarchies, finding overlap between triangle pairs. In contrast, algorithms based on features have been developed. A feature of a mesh is either a vertex, an edge, or a face. \citep{curtis2008} propose a different type of hierarchy aimed at reducing the number of false positive or duplicate overlap tests. These duplicate tests occur because they are performed on triangles, which sometimes share features. Collision detection using feature-based hierarchies require three structures for each object, one for each type of feature (vertex, edge, face), and contact information is received by testing between edge BVHs and vertex-face BVHs. Besides improving efficiency by avoiding duplicate tests (for example, testing an edge shared by two triangles twice), this method also leads to better performance due to bounding volumes being smaller than the volumes of their triangles. However, the main drawback to this approach is immediately apparent: there are three trees instead of one, and each requires updating. In order to combine the advantages of feature based and triangle based hierarchies, the authors of \citep{curtis2008} introduce \textbf{Representative Triangles}. A RT is a triangle structure that in addition to regular information, also stores feature assignments and bounding volumes for those features. In order to create RTs from a mesh, the authors provide the conditions that must be satisfied:
+The methods presented previously in \autoref{sec:bvh} make use of hierarchies, finding overlap between triangle pairs. In contrast, algorithms based on features have been developed. A feature of a mesh is either a vertex, an edge, or a face. \citep{curtis2008} propose a different type of hierarchy aimed at reducing the number of false positive or duplicate overlap tests. These duplicate tests occur because they are performed on triangles, which sometimes share features. Collision detection using feature-based hierarchies require three structures for each object, one for each type of feature (vertex, edge, face), and contact information is received by testing between edge BVHs and vertex-face BVHs. Besides improving efficiency by avoiding duplicate tests (for example, testing an edge shared by two triangles twice), this method also leads to better performance due to bounding volumes being smaller than the volumes of their triangles. However, the main drawback to this approach is immediately apparent: there are three trees instead of one, and each requires updating. In order to combine the advantages of feature based and triangle based hierarchies, the authors of \citep{curtis2008} introduce \textbf{Representative Triangles}. A RT is a triangle structure that in addition to regular information, also stores feature assignments and bounding volumes for those features. In order to create RTs from a mesh, the authors provide the conditions that must be satisfied:
 
 \begin{itemize}
 	\item Every feature must be represented by exactly one triangle
@@ -131,8 +183,8 @@ Using these properties, there are multiple valid \textbf{assignment schemata}. \
 
 
 \FloatBarrier
-\subsection{Continuous Collision Detection}
-\label{sub-sec:ccd}
+\section{Continuous Collision Detection}
+\label{sec:ccd}
 
 Most rigid body simulations approach collision detection in a discrete manner. \textbf{Discrete collision detection} algorithms require a list of objects in the broad phase, or a list of primitives in the more precise mid and narrow phases. These lists are updated at each simulation step, and they are used to find those pairs of intersecting elements. This approach is more computationally efficient, but it has one major drawback, which makes it unfeasible for deformable objects. Due to the (most commonly fixed) time step at which the physics simulation is updated, the exact point of contact between two elements is unknown. The collision detection result should be interpreted as "elements \textbf{A} and \textbf{B} have intersected sometime between steps \textbf{T} and \textbf{T + 1}". This allows the "bullet through paper" problem, also known as \textbf{tunneling}, to occur: An object \textbf{A} is heading towards another, \textbf{B}, with such speed that at time step \textbf{T} they have not yet intersected, but at the next step, \textbf{T + 1}, \textbf{A} has already completely passed through \textbf{B}, and the collision is missed. One could shorten the time between simulation updates, but this filters only some missed collisions, not all. In addition, this approach negatively impacts application performance. Depending on the level of object detail, these inter-penetrations happen frequently, even with small time windows between simulation updates.
 
@@ -158,4 +210,21 @@ The low-level culling method partitions the remaining possible intersecting tria
 
 As can be seen in \autoref{img:orphan-sets}, the OIS of a feature contains all its incident triangles, while its OAS contains all triangles adjacent to the triangles in the OIS, but not present in the OIS. These two sets are used to find the orphan sets for all vertices and edges. Finally, the adjacent phase tests all pairs in the orphan sets for overlap. Because these orphans are adjacent triangles, BVH tests will not eliminate them. The authors use the CNC test described earlier: if the test shows that an area cannot self intersect, then any orphan pairs completely inside that area can be discarded.
 
+Another optimization that can be implemented to accelerate CCD between primitives makes use of the fact that if the four points that are to be tested never become coplanar during the time interval, they can not intersect. \citep{tang-filter} introduce \textbf{Deforming Non-Penetration Filters} to quickly assert if a VF or EE test can be skipped. The basic idea is that if the projected distance of two features along the contact normal becomes zero at any time in the interval, the points will be coplanar. In the following, $P_{0}$ represents the position of point P at the beginning of the time interval and $P_{1}$ its position at the end of the time interval. For the VF case, let $P$, $\{a, b, c\}$ be the four points. \citep{tang-filter} state that if \[A, B, \frac{2 * C + F}{3}, \frac{2 * D + E}{3}\] all have the same sign, the four points will never be coplanar in the time interval $[0, 1]$. $A, B, C, D, E, F$ are calculated as follows:
 
+\[A = (P_{0} - a_{0}) \cdot n_{0}, B = (P_{1} - a_{1}) \cdot n_{1} \]
+\[C = (P_{0} - a_{0}) \cdot n, D = (P_{1} - a_{1}) \cdot n \]
+\[E = (P_{0} - a_{0}) \cdot n_{1}, F = (P_{1} - a_{1}) \cdot n_{0} \] where $n_{0}$ and $n_{1}$ represent the triangle normal at the beginning and end of the time interval, and \[n = \frac{n_{0} + n_{1} - ((v_{b} - v_{a}) \times (v_{c} - v_{a}))}{2} \] with $v_{i}, i = \{a, b, c\}$ being the velocities of the triangle vertices within the time interval. A similar test can be formulated in the case of EE tests. Let $\{a, b\}$ and $\{c, d\}$ be the two edges. Then, similarly to the VF case, if \[A', B', \frac{2 * C' + F'}{3}, \frac{2 * D' + E'}{3}\] have the same sign, the EE test can be discarded:
+
+\[A' = (d_{0} - c_{0}) \cdot n'_{0}, B' = (d_{1} - c_{1}) \cdot n'_{1} \]
+\[C' = (d_{0} - c_{0}) \cdot n', D' = (d_{1} - c_{1}) \cdot n' \]
+\[E' = (d_{0} - c_{0}) \cdot n'_{1}, F' = (d_{1} - c_{1}) \cdot n'_{0} \]
+
+where \[n'_{0} = (a_{0} - c_{0}) \times (b_{0} - d_{0}), n'_{1} = (a_{1} - c_{1}) \times (b_{1} - d_{1}),
+n' = \frac{n'_{0} + n'_{1} - (v_{a} - v_{c}) \times (v_{b} - v_{c})}{2} \] and $v_{i}, i = \{a, b, c, d\}$ are the velocities of the four points within the time interval.
+
+\FloatBarrier
+\section{Collision Response}
+\label{sec:cresp}
+
+One of the most commonly used collision response schemes is the one used in \citep{bridson02}. The method separates the cloth simulation engine from the collision response module. At each time step, the collision response module is given the vertex positions at the beginning of the time step, and the candidate positions at the end of the time step, as provided by the internal dynamics engine. Then, the final collision-free positions are computed. First, discrete collision detection is performed for the initial vertex positions. To solve these collisions, friction and repulsion forces are computed and applied to the velocities. Afterwards, continuous collision detection is performed using the modified velocities. Applying impulses to a cloth in order to solve collisions might introduce secondary collisions. The continuous collision detection and impulses are performed multiple times, until an intersection-free state is obtained, or a maximum number of iterations are achieved. If after these iterations, there are still collisions present, \citep{bridson02} use a slightly modified version of the rigid impact zones presented in \citep{provot97} to solve the remaining collisions.

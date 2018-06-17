@@ -1,0 +1,8 @@
+\FloatBarrier
+\chapter{Results}
+\label{chapter:results}
+
+
+\autoref{img:cudaBenchmark} shows the average time percentages of a simulation running for 1000 frames. On the graph, "PBD External" represents the first step of the PBD loop, in which the positions are advanced according to gravity, and then dampened with a function inspired by global rigid body motion, presented in \citep{mullerpbd}. In "Update Triangles", the triangle normals are recomputed, as well as their swept AABBs and Morton codes. "Build BVH" is self explanatory - the LBVH is built according to the method explained in \autoref{sec:lbvh}. "Create Triangle Tests" performs LBVH traversal and creates the cache-friendly data structures for the triangle tests, while the module labeled as "Perform Triangle Tests" flags the positive VF or EE contacts, and fills their corresponding data structures. The Jacobi-based solver is represented by "PBD Solver", and it runs for 6 iterations. "PBD Integration" performs the final position updates.
+
+\fig[scale=0.8]{src/img/cudaBenchmark.png}{img:cudaBenchmark}{Average time spent (in percentages) for the different modules of the simulation. The piece of cloth simulated is composed of approximately 7000 triangles.}
